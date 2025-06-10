@@ -203,173 +203,176 @@ class ScenicRecommender:
 # 主程序流程
 recommender = ScenicRecommender()
 
-with st.spinner("正在加载数据和训练模型..."):
-    success = recommender.load_and_preprocess_data('全国5A级景区.xlsx', '景区评论数据集.xlsx')
-
-    if success:
-        success = recommender.train_model()
+try:
+    with st.spinner("正在加载数据和训练模型..."):
+        success = recommender.load_and_preprocess_data('全国5A级景区.xlsx', '景区评论数据集.xlsx')
 
         if success:
-            st.success(f"数据加载和模型训练完成！训练耗时: {recommender.training_time:.2f}秒")
+            success = recommender.train_model()
 
-            # 显示数据统计信息
-            st.subheader("数据统计信息")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("景区数量", len(recommender.df['景区名称'].unique()))
-            col2.metric("用户评论数量", len(recommender.df))
-            col3.metric("用户数量", len(recommender.df['用户ID'].unique()))
+            if success:
+                st.success(f"数据加载和模型训练完成！训练耗时: {recommender.training_time:.2f}秒")
 
-            # 数据可视化
-            st.subheader("数据可视化")
-            tab1, tab2, tab3 = st.tabs(["景区分布", "评分分布", "热门景区"])
+                # 显示数据统计信息
+                st.subheader("数据统计信息")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("景区数量", len(recommender.df['景区名称'].unique()))
+                col2.metric("用户评论数量", len(recommender.df))
+                col3.metric("用户数量", len(recommender.df['用户ID'].unique()))
 
-            with tab1:
-                regional_distribution = recommender.get_regional_distribution()
-                fig, ax = plt.subplots(figsize=(10, 6))
-                sns.barplot(x=regional_distribution.index, y=regional_distribution.values, ax=ax)
-                plt.xticks(rotation=45)
-                plt.title("各省5A级景区数量分布")
-                st.pyplot(fig)
+                # 数据可视化
+                st.subheader("数据可视化")
+                tab1, tab2, tab3 = st.tabs(["景区分布", "评分分布", "热门景区"])
 
-            with tab2:
-                ratings = recommender.get_average_ratings()
-                fig, ax = plt.subplots(figsize=(10, 6))
-                sns.histplot(ratings.values, bins=20, kde=True, ax=ax)
-                plt.title("景区评分分布")
-                st.pyplot(fig)
+                with tab1:
+                    regional_distribution = recommender.get_regional_distribution()
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    sns.barplot(x=regional_distribution.index, y=regional_distribution.values, ax=ax)
+                    plt.xticks(rotation=45)
+                    plt.title("各省5A级景区数量分布")
+                    st.pyplot(fig)
 
-            with tab3:
-                popular_scenics = recommender.get_popular_scenics(10)
-                fig, ax = plt.subplots(figsize=(10, 6))
-                sns.barplot(x=popular_scenics.values, y=popular_scenics.index, ax=ax)
-                plt.title("热门景区（评论数量）")
-                st.pyplot(fig)
+                with tab2:
+                    ratings = recommender.get_average_ratings()
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    sns.histplot(ratings.values, bins=20, kde=True, ax=ax)
+                    plt.title("景区评分分布")
+                    st.pyplot(fig)
 
-            # 推荐系统界面
-            st.subheader("景区推荐")
-            recommendation_type = st.selectbox(
-                "推荐类型",
-                ["基于内容的推荐", "基于用户的推荐", "混合推荐"]
-            )
+                with tab3:
+                    popular_scenics = recommender.get_popular_scenics(10)
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    sns.barplot(x=popular_scenics.values, y=popular_scenics.index, ax=ax)
+                    plt.title("热门景区（评论数量）")
+                    st.pyplot(fig)
 
-            if recommendation_type == "基于内容的推荐":
-                selected_scenic = st.selectbox(
-                    "选择景区",
+                # 推荐系统界面
+                st.subheader("景区推荐")
+                recommendation_type = st.selectbox(
+                    "推荐类型",
+                    ["基于内容的推荐", "基于用户的推荐", "混合推荐"]
+                )
+
+                if recommendation_type == "基于内容的推荐":
+                    selected_scenic = st.selectbox(
+                        "选择景区",
+                        sorted(recommender.df['景区名称'].unique())
+                    )
+                    top_n = st.slider("推荐数量", 1, 10, 5)
+
+                    if st.button("获取推荐"):
+                        with st.spinner("正在生成推荐..."):
+                            recommendations = recommender.get_similar_scenics(selected_scenic, top_n)
+                            st.write(f"与 **{selected_scenic}** 相似的景区:")
+                            st.dataframe(recommendations.style.format({"相似度得分": "{:.2f}"}))
+
+                elif recommendation_type == "基于用户的推荐":
+                    user_id = st.text_input("输入用户ID", "11111")
+                    top_n = st.slider("推荐数量", 1, 10, 5)
+
+                    if st.button("获取推荐"):
+                        with st.spinner("正在生成推荐..."):
+                            # 获取用户已经评价过的景区
+                            user_scenics = recommender.get_user_reviewed_scenics(user_id)
+
+                            if len(user_scenics) == 0:
+                                st.warning(f"用户 {user_id} 没有评价记录，无法进行个性化推荐。")
+                            else:
+                                st.write(f"用户 {user_id} 已评价的景区:")
+                                st.write(", ".join(user_scenics))
+
+                                # 生成推荐
+                                recommendations = recommender.get_user_recommendations(user_id, top_n)
+
+                                st.write(f"为用户 {user_id} 推荐的景区:")
+                                st.dataframe(recommendations.style.format({"预测评分": "{:.2f}"}))
+
+                else:  # 混合推荐
+                    user_id = st.text_input("输入用户ID", "11111")
+                    selected_scenic = st.selectbox(
+                        "选择参考景区",
+                        sorted(recommender.df['景区名称'].unique())
+                    )
+                    top_n = st.slider("推荐数量", 1, 10, 5)
+                    content_weight = st.slider("内容推荐权重", 0.0, 1.0, 0.7, 0.1)
+                    collab_weight = st.slider("协同过滤权重", 0.0, 1.0, 0.3, 0.1)
+
+                    if st.button("获取推荐"):
+                        with st.spinner("正在生成混合推荐..."):
+                            recommendations = recommender.hybrid_recommend(
+                                user_id,
+                                selected_scenic,
+                                top_n,
+                                content_weight,
+                                collab_weight
+                            )
+
+                            st.write(f"混合推荐结果 (用户 {user_id} 可能喜欢的类似 **{selected_scenic}** 的景区):")
+                            st.dataframe(recommendations[['景区名称', '相似度得分', '预测评分', '综合得分']].style.format({
+                                "相似度得分": "{:.2f}",
+                                "预测评分": "{:.2f}",
+                                "综合得分": "{:.2f}"
+                            }))
+
+                # 景区详情查看
+                st.subheader("景区详情")
+                selected_scenic_detail = st.selectbox(
+                    "选择景区查看详情",
                     sorted(recommender.df['景区名称'].unique())
                 )
-                top_n = st.slider("推荐数量", 1, 10, 5)
 
-                if st.button("获取推荐"):
-                    with st.spinner("正在生成推荐..."):
-                        recommendations = recommender.get_similar_scenics(selected_scenic, top_n)
-                        st.write(f"与 **{selected_scenic}** 相似的景区:")
-                        st.dataframe(recommendations.style.format({"相似度得分": "{:.2f}"}))
-
-            elif recommendation_type == "基于用户的推荐":
-                user_id = st.text_input("输入用户ID", "11111")
-                top_n = st.slider("推荐数量", 1, 10, 5)
-
-                if st.button("获取推荐"):
-                    with st.spinner("正在生成推荐..."):
-                        # 获取用户已经评价过的景区
-                        user_scenics = recommender.get_user_reviewed_scenics(user_id)
-
-                        if len(user_scenics) == 0:
-                            st.warning(f"用户 {user_id} 没有评价记录，无法进行个性化推荐。")
-                        else:
-                            st.write(f"用户 {user_id} 已评价的景区:")
-                            st.write(", ".join(user_scenics))
-
-                            # 生成推荐
-                            recommendations = recommender.get_user_recommendations(user_id, top_n)
-
-                            st.write(f"为用户 {user_id} 推荐的景区:")
-                            st.dataframe(recommendations.style.format({"预测评分": "{:.2f}"}))
-
-            else:  # 混合推荐
-                user_id = st.text_input("输入用户ID", "11111")
-                selected_scenic = st.selectbox(
-                    "选择参考景区",
-                    sorted(recommender.df['景区名称'].unique())
-                )
-                top_n = st.slider("推荐数量", 1, 10, 5)
-                content_weight = st.slider("内容推荐权重", 0.0, 1.0, 0.7, 0.1)
-                collab_weight = st.slider("协同过滤权重", 0.0, 1.0, 0.3, 0.1)
-
-                if st.button("获取推荐"):
-                    with st.spinner("正在生成混合推荐..."):
-                        recommendations = recommender.hybrid_recommend(
-                            user_id,
-                            selected_scenic,
-                            top_n,
-                            content_weight,
-                            collab_weight
-                        )
-
-                        st.write(f"混合推荐结果 (用户 {user_id} 可能喜欢的类似 **{selected_scenic}** 的景区):")
-                        st.dataframe(recommendations[['景区名称', '相似度得分', '预测评分', '综合得分']].style.format({
-                            "相似度得分": "{:.2f}",
-                            "预测评分": "{:.2f}",
-                            "综合得分": "{:.2f}"
-                        }))
-
-            # 景区详情查看
-            st.subheader("景区详情")
-            selected_scenic_detail = st.selectbox(
-                "选择景区查看详情",
-                sorted(recommender.df['景区名称'].unique())
-            )
-
-            if st.button("查看详情"):
-                with st.spinner("正在加载景区详情..."):
-                    try:
-                        scenic_details = recommender.get_scenic_details(selected_scenic_detail)
-                        st.write(f"### {scenic_details['景区名称']}")
-
-                        col1, col2, col3 = st.columns(3)
-                        col1.metric("平均评分", f"{scenic_details['映射评分']:.1f}/5.0")
-                        col1.metric("评论数量", len(recommender.get_scenic_comments(selected_scenic_detail)))
-                        col2.metric("省份", scenic_details.get('省份', '未知'))
-                        col2.metric("城市", scenic_details.get('城市', '未知'))
-
-                        st.write("**景区简介**")
-                        st.write(scenic_details.get('景区简介', '暂无简介'))
-
-                        st.write("**热门评论**")
-                        comments = recommender.get_scenic_comments(selected_scenic_detail)
-                        for i, comment in enumerate(comments):
-                            st.markdown(f"> {comment}")
-
-                        st.write("**关键词**")
-                        keywords = recommender.get_scenic_keywords(selected_scenic_detail)
-                        if keywords:
-                            st.markdown(" ".join([f"#{word}" for word in keywords]))
-
-                        # 评论情感分析
-                        st.write("**评论情感分析**")
-                        scenic_comments = recommender.df[recommender.df['景区名称'] == selected_scenic_detail]
-                        sentiment_scores = scenic_comments['情感得分'].dropna()
-
-                        if len(sentiment_scores) > 0:
-                            fig, ax = plt.subplots(figsize=(8, 4))
-                            sns.histplot(sentiment_scores, bins=20, kde=True, ax=ax)
-                            plt.title("评论情感得分分布")
-                            plt.xlabel("情感得分 (0=负面, 1=正面)")
-                            st.pyplot(fig)
-
-                            positive_ratio = len(sentiment_scores[sentiment_scores > 0.7]) / len(sentiment_scores)
-                            neutral_ratio = len(
-                                sentiment_scores[(sentiment_scores >= 0.3) & (sentiment_scores <= 0.7)]) / len(
-                                sentiment_scores)
-                            negative_ratio = len(sentiment_scores[sentiment_scores < 0.3]) / len(sentiment_scores)
+                if st.button("查看详情"):
+                    with st.spinner("正在加载景区详情..."):
+                        try:
+                            scenic_details = recommender.get_scenic_details(selected_scenic_detail)
+                            st.write(f"### {scenic_details['景区名称']}")
 
                             col1, col2, col3 = st.columns(3)
-                            col1.metric("积极评论比例", f"{positive_ratio:.2%}")
-                            col2.metric("中性评论比例", f"{neutral_ratio:.2%}")
-                            col3.metric("消极评论比例", f"{negative_ratio:.2%}")
-                    except Exception as e:
-                        st.error(f"获取景区详情失败: {e}")
-    else:
-        st.error("数据加载失败，请检查数据文件路径和格式。")
-else:
-    st.error("模型训练失败，请检查数据格式和模型参数。")
+                            col1.metric("平均评分", f"{scenic_details['映射评分']:.1f}/5.0")
+                            col1.metric("评论数量", len(recommender.get_scenic_comments(selected_scenic_detail)))
+                            col2.metric("省份", scenic_details.get('省份', '未知'))
+                            col2.metric("城市", scenic_details.get('城市', '未知'))
+
+                            st.write("**景区简介**")
+                            st.write(scenic_details.get('景区简介', '暂无简介'))
+
+                            st.write("**热门评论**")
+                            comments = recommender.get_scenic_comments(selected_scenic_detail)
+                            for i, comment in enumerate(comments):
+                                st.markdown(f"> {comment}")
+
+                            st.write("**关键词**")
+                            keywords = recommender.get_scenic_keywords(selected_scenic_detail)
+                            if keywords:
+                                st.markdown(" ".join([f"#{word}" for word in keywords]))
+
+                            # 评论情感分析
+                            st.write("**评论情感分析**")
+                            scenic_comments = recommender.df[recommender.df['景区名称'] == selected_scenic_detail]
+                            sentiment_scores = scenic_comments['情感得分'].dropna()
+
+                            if len(sentiment_scores) > 0:
+                                fig, ax = plt.subplots(figsize=(8, 4))
+                                sns.histplot(sentiment_scores, bins=20, kde=True, ax=ax)
+                                plt.title("评论情感得分分布")
+                                plt.xlabel("情感得分 (0=负面, 1=正面)")
+                                st.pyplot(fig)
+
+                                positive_ratio = len(sentiment_scores[sentiment_scores > 0.7]) / len(sentiment_scores)
+                                neutral_ratio = len(
+                                    sentiment_scores[(sentiment_scores >= 0.3) & (sentiment_scores <= 0.7)]) / len(
+                                    sentiment_scores)
+                                negative_ratio = len(sentiment_scores[sentiment_scores < 0.3]) / len(sentiment_scores)
+
+                                col1, col2, col3 = st.columns(3)
+                                col1.metric("积极评论比例", f"{positive_ratio:.2%}")
+                                col2.metric("中性评论比例", f"{neutral_ratio:.2%}")
+                                col3.metric("消极评论比例", f"{negative_ratio:.2%}")
+                        except Exception as e:
+                            st.error(f"获取景区详情失败: {e}")
+            else:  # 对应第二个 if success:
+                st.error("模型训练失败，请检查数据格式和模型参数。")
+        else:  # 对应第一个 if success:
+            st.error("数据加载失败，请检查数据文件路径和格式。")
+except Exception as e:
+    st.error(f"程序运行出错: {e}")
