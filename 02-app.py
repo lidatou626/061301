@@ -369,5 +369,7 @@ with st.spinner("正在加载数据和训练模型..."):
                             col3.metric("消极评论比例", f"{negative_ratio:.2%}")
                     except Exception as e:
                         st.error(f"获取景区详情失败: {e}")
+    else:
+        st.error("数据加载失败，请检查数据文件路径和格式。")
 else:
-st.error("数据加载或模型训练失败，请检查数据文件和依赖库。")
+    st.error("模型训练失败，请检查数据格式和模型参数。")
